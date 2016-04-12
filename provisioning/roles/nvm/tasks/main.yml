@@ -1,0 +1,71 @@
+---
+- name: install dependencies
+  yum: name={{ item }} state=latest
+  with_items:
+    - git
+    - libselinux-python
+  when: ansible_os_family == "RedHat"
+  tags: nvm
+
+- name: install dependencies
+  apt: pkg={{ item }} update_cache=yes cache_valid_time=3600
+  with_items:
+    - git
+    - curl
+    - build-essential
+    - libssl-dev
+  when: ansible_os_family == "Debian"
+  tags: nvm
+
+- name: install nvm
+  sudo: yes
+  sudo_user: "{{ nvm.user }}"
+  git: repo={{ item.repo }} dest={{ item.dest }} version={{ item.version }}
+  with_items: 
+    - { repo: 'https://github.com/creationix/nvm.git', dest: '~/.nvm', version: "{{ nvm.version }}" }
+  tags: nvm
+
+- name: soucre nvm.sh in ~/.bash_profile
+  sudo: yes
+  sudo_user: "{{ nvm.user }}"
+  lineinfile: >
+    dest=~/.bash_profile
+    line="source ~/.nvm/nvm.sh"
+    create=yes
+  when: ansible_os_family == "RedHat"
+  tags: nvm
+
+- name: soucre nvm.sh in ~/.profile
+  sudo: yes
+  sudo_user: "{{ nvm.user }}"
+  lineinfile: >
+    dest=~/.profile
+    line="source ~/.nvm/nvm.sh"
+    create=yes
+  when: ansible_os_family == "Debian"
+  tags: nvm
+
+- name: check if version is installed node
+  shell: "sudo -iu {{ nvm.user }} nvm ls {{ nvm.node_version }}"
+  register: node_check_install
+  changed_when: False
+  ignore_errors: yes
+  tags: nvm
+
+- name: install node
+  command: sudo -iu {{ nvm.user }} nvm install {{ nvm.node_version }}
+  register: nvm_install_result
+  changed_when: node_check_install|failed
+  tags: nvm
+
+- name: check default node version
+  shell: sudo -iu {{ nvm.user }} nvm ls | grep -e 'default -> {{ nvm.node_version }}'
+  register: nvm_check_default
+  changed_when: False
+  ignore_errors: True
+  tags: nvm
+
+- name: set default node version
+  command: sudo -iu {{ nvm.user }} nvm alias default {{ nvm.node_version }}
+  when: nvm_check_default|failed
+  tags: nvm
